@@ -1,0 +1,677 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>블록 뷰 매칭</title>
+<style>
+  :root{
+    --bg: #15171c;
+    --panel: #1c1f26;
+    --panel2: #22262f;
+    --line: #2e3340;
+    --text: #e9ebf0;
+    --sub: #8a90a0;
+    --accent: #ff7a45;
+    --good: #4fd17a;
+    --bad: #ff5c5c;
+    --red: #e6543f;
+    --blue: #3f7fe6;
+    --yellow: #e6c23f;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Pretendard","Segoe UI",-apple-system,sans-serif;
+    min-height:100vh;
+    padding:24px 16px 60px;
+  }
+  .wrap{max-width:1180px;margin:0 auto;}
+
+  header{
+    display:flex; align-items:baseline; justify-content:space-between;
+    flex-wrap:wrap; gap:10px; margin-bottom:18px;
+  }
+  h1{
+    font-size:22px; letter-spacing:.5px; margin:0;
+    font-weight:700;
+  }
+  h1 span{color:var(--accent);}
+  .meta{color:var(--sub); font-size:13px;}
+
+  .topbar{
+    display:flex; gap:10px; flex-wrap:wrap; align-items:center;
+    background:var(--panel); border:1px solid var(--line);
+    border-radius:10px; padding:12px 14px; margin-bottom:18px;
+  }
+  .seg{display:flex; gap:4px; background:var(--panel2); padding:4px; border-radius:8px;}
+  .seg button{
+    border:none; background:transparent; color:var(--sub);
+    padding:7px 14px; border-radius:6px; font-size:13px; cursor:pointer;
+    font-weight:600; transition:.15s;
+  }
+  .seg button.active{background:var(--accent); color:#1a1208;}
+  .seg button:hover:not(.active){color:var(--text);}
+
+  .num-grid{display:flex; gap:5px; flex-wrap:wrap;}
+  .num-grid button{
+    width:30px;height:30px;border-radius:6px;border:1px solid var(--line);
+    background:var(--panel2); color:var(--sub); font-size:12px; cursor:pointer;
+  }
+  .num-grid button.active{background:var(--accent); color:#1a1208; border-color:var(--accent); font-weight:700;}
+  .num-grid button.done{border-color:var(--good); color:var(--good);}
+
+  .spacer{flex:1;}
+  .timer{font-variant-numeric:tabular-nums; font-size:14px; color:var(--sub);}
+  .score{font-size:14px; color:var(--accent); font-weight:700;}
+
+  .views-title{font-size:13px; color:var(--sub); margin:0 0 8px 2px; letter-spacing:.3px;}
+  .panel{
+    background:var(--panel); border:1px solid var(--line); border-radius:12px;
+    padding:16px; margin-bottom:18px;
+  }
+  .views-row{
+    display:grid; grid-template-columns:repeat(5,1fr); gap:10px;
+  }
+  @media (max-width:680px){
+    .views-row{ grid-template-columns:repeat(3,1fr); }
+    .view-box{ padding:6px; }
+    .vcell{ width:auto; height:auto; aspect-ratio:1/1; min-width:14px; }
+    .view-box .view-grid{ width:100%; grid-template-columns:repeat(var(--n,4),1fr); }
+  }
+  .view-box{
+    background:var(--panel2); border:1px solid var(--line); border-radius:8px;
+    padding:8px; text-align:center; transition:border-color .15s, box-shadow .15s;
+  }
+  .view-box.matched{ border-color:rgba(79,209,122,.55); box-shadow:0 0 0 1px rgba(79,209,122,.35) inset; }
+  .view-box .label{font-size:11px; color:var(--sub); margin-bottom:6px; font-weight:600; letter-spacing:.4px;}
+  .view-box.matched .label{ color:var(--good); }
+  .view-grid{
+    display:grid; gap:2px; margin:0 auto; width:fit-content;
+    grid-template-columns:repeat(var(--n,4),18px);
+  }
+  .vcell{
+    width:18px;height:18px;border-radius:3px; background:#15171c; border:1px solid #2a2e38;
+  }
+  .vcell.mismatch{outline:2px solid var(--bad); outline-offset:-1px;}
+
+  .build-area{display:grid; grid-template-columns: max-content 1fr; gap:22px; align-items:start;}
+  @media (max-width:760px){ .build-area{grid-template-columns:1fr;} }
+
+  .layer-tabs{display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap;}
+  .layer-tabs button{
+    background:var(--panel2); border:1px solid var(--line); color:var(--sub);
+    padding:7px 12px; border-radius:7px; font-size:12px; cursor:pointer; font-weight:600;
+  }
+  .layer-tabs button.active{background:#2c3140; color:var(--text); border-color:var(--accent);}
+
+  .editor-grid{
+    display:grid; gap:4px; width:fit-content;
+  }
+  .ecell{
+    width:42px;height:42px;border-radius:6px; background:#0f1116;
+    border:1px solid var(--line); cursor:pointer; transition:.1s;
+    position:relative;
+  }
+  .ecell:hover{border-color:var(--accent);}
+  .editor-grid.locked{ pointer-events:none; opacity:.5; filter:grayscale(.2); }
+  /* the cell directly below current layer that already has a block — shown as a faint footprint */
+  .ecell.support::after{
+    content:''; position:absolute; inset:6px; border-radius:4px;
+    border:1px dashed #3a4152;
+  }
+
+  .side{display:flex; flex-direction:column; gap:14px;}
+  .preview-card{
+    background:var(--panel2); border:1px solid var(--line); border-radius:10px;
+    padding:10px 10px 6px;
+  }
+  .preview-card .label{font-size:11px; color:var(--sub); font-weight:600; margin-bottom:6px; letter-spacing:.3px;}
+  #preview3d{ display:block; width:100%; height:auto; max-width:260px; margin:0 auto; }
+
+  .tool-title{font-size:12px; color:var(--sub); font-weight:600; margin-bottom:6px;}
+  .cycle-legend{display:flex; flex-direction:column; gap:6px;}
+  .cyc-item{
+    display:flex; align-items:center; gap:8px;
+    background:var(--panel2); border:1px solid var(--line); border-radius:8px;
+    padding:8px 10px; color:var(--text); font-size:13px; font-weight:600;
+  }
+  .cyc-n{
+    width:18px; height:18px; flex-shrink:0; border-radius:5px;
+    background:#0f1116; border:1px solid var(--line); color:var(--sub);
+    font-size:11px; font-weight:700; display:flex; align-items:center; justify-content:center;
+  }
+  .swatch{width:16px;height:16px;border-radius:4px; flex-shrink:0;}
+
+  .actions{display:flex; gap:8px; flex-wrap:wrap; margin-top:4px;}
+  .btn{
+    border:none; padding:9px 14px; border-radius:8px; font-size:13px; font-weight:700;
+    cursor:pointer; transition:.15s;
+  }
+  .btn-primary{background:var(--accent); color:#1a1208;}
+  .btn-primary:hover{filter:brightness(1.1);}
+  .btn-ghost{background:var(--panel2); color:var(--text); border:1px solid var(--line);}
+  .btn-ghost:hover{border-color:var(--sub);}
+  .btn:disabled{opacity:.4; cursor:default;}
+
+  .player-section{margin-top:20px; border-top:1px solid var(--line); padding-top:16px;}
+  .player-head{display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; flex-wrap:wrap;}
+  .match-status{
+    font-size:13px; font-weight:700; color:var(--sub);
+    background:var(--panel2); border:1px solid var(--line); border-radius:999px; padding:5px 12px;
+  }
+  .match-status.full{ color:#10301c; background:var(--good); border-color:var(--good); }
+
+  .result-banner{
+    margin-top:16px; padding:14px 16px; border-radius:10px; font-size:14px; font-weight:700;
+    display:none; align-items:center; gap:10px;
+  }
+  .result-banner.ok{display:flex; background:rgba(79,209,122,.12); color:var(--good); border:1px solid rgba(79,209,122,.35);}
+  .result-banner.warn{display:flex; background:rgba(230,194,63,.1); color:var(--yellow); border:1px solid rgba(230,194,63,.3);}
+
+  .hint{color:var(--sub); font-size:12px; margin-top:12px; line-height:1.6;}
+  .axis-note{font-size:10px; color:#5d6373; margin-top:6px;}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <h1>블록 <span>뷰</span> 매칭</h1>
+    <div class="meta">5개 투영도(정면·우측·좌측·후면·평면)를 보고 같은 3D 구조를 완성하세요</div>
+  </header>
+
+  <div class="topbar">
+    <div class="seg" id="diffSeg">
+      <button data-diff="easy" class="active">하</button>
+      <button data-diff="medium">중</button>
+      <button data-diff="hard">상</button>
+      <button data-diff="expert">최상</button>
+      <button data-diff="master">마스터</button>
+    </div>
+    <div class="num-grid" id="numGrid"></div>
+    <div class="spacer"></div>
+    <div class="timer" id="timer">00:00</div>
+    <div class="score" id="scoreLabel">0 / 10 완료</div>
+  </div>
+
+  <div class="panel">
+    <div class="views-title">🎯 목표 형태 — 정사영 5뷰 (이 모양이 나오도록 만드세요)</div>
+    <div class="views-row" id="targetViews"></div>
+  </div>
+
+  <div class="panel">
+    <div class="views-title">🧱 조립 영역 — 층을 고르고 칸을 클릭해 블록을 쌓으세요</div>
+    <div class="build-area">
+      <div>
+        <div class="layer-tabs" id="layerTabs"></div>
+        <div class="editor-grid" id="editorGrid"></div>
+        <div class="axis-note">↑ = 안쪽(뒤) · ↓ = 바깥쪽(앞) · ← x → · 점선 = 아래층에 블록 있음(받침)</div>
+      </div>
+
+      <div class="side">
+        <div class="preview-card">
+          <div class="label">🧊 내가 쌓는 입체 모양 (실시간)</div>
+          <canvas id="preview3d"></canvas>
+        </div>
+        <div>
+          <div class="tool-title">칸을 반복 클릭하면 색이 바뀝니다</div>
+          <div class="cycle-legend" id="cycleLegend"></div>
+        </div>
+        <div class="actions">
+          <button class="btn btn-ghost" id="undoBtn">되돌리기</button>
+          <button class="btn btn-ghost" id="resetBtn">초기화</button>
+          <button class="btn btn-ghost" id="answerBtn">정답 보기</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="player-section">
+      <div class="player-head">
+        <div class="views-title" style="margin:0;">🔍 내 투영도 — 목표와 실시간 비교 (빨간 테두리 = 다른 칸)</div>
+        <div class="match-status" id="matchStatus">0 / 5 뷰 일치</div>
+      </div>
+      <div class="views-row" id="playerViews"></div>
+    </div>
+
+    <div class="result-banner" id="resultBanner"></div>
+    <div class="hint">칸을 클릭할 때마다 색이 순환합니다(난이도에 따라 색 개수가 달라짐). 아래 <b>내 투영도</b>가 위쪽 <b>목표</b>와 똑같아지면 자동으로 완성 처리됩니다. 블록은 바닥이나 다른 블록 위에만 놓을 수 있어요(중력).</div>
+  </div>
+
+</div>
+
+<script>
+/* ---------------- 기본 설정 ---------------- */
+let N = 4; // 현재 문제의 격자 크기 (난이도에 따라 4 또는 5로 바뀜)
+const COLOR_HEX = { red:'#e6543f', blue:'#3f7fe6', yellow:'#e6c23f' };
+const COLOR_NAME = { red:'빨강', blue:'파랑', yellow:'노랑' };
+
+const DIFF_CONF = {
+  easy:   { grid:4, count:[2,4],   colors:1 },
+  medium: { grid:4, count:[4,6],   colors:2 },
+  hard:   { grid:4, count:[6,9],   colors:3 },
+  expert: { grid:4, count:[10,14], colors:3 },   // 최상: 촘촘한 4×4×4
+  master: { grid:5, count:[14,20], colors:3 }    // 마스터: 더 큰 5×5×5
+};
+const DIFFS = ['easy','medium','hard','expert','master'];
+const PALETTE = ['red','blue','yellow'];
+
+let state = {
+  diff: 'easy',
+  problemIndex: 0,
+  puzzles: {},
+  done: Object.fromEntries(DIFFS.map(d=>[d, Array(10).fill(false)])),
+  target: null,
+  build: null,
+  history: [],
+  currentLayer: 0,
+  solved: false,
+  locked: false,
+  usedAnswer: false,
+  timerStart: null,
+  timerInt: null
+};
+
+function activePalette(){ return PALETTE.slice(0, DIFF_CONF[state.diff].colors); }
+
+/* ---------------- 퍼즐 생성 ---------------- */
+function randInt(n){ return Math.floor(Math.random()*n); }
+function key(x,y,z){ return x+','+y+','+z; }
+function isSupported(map, x, y, z){ return y===0 || map.has(key(x,y-1,z)); }
+
+function generatePuzzle(diff){
+  const conf = DIFF_CONF[diff];
+  const gn = conf.grid;                          // 이 난이도의 격자 크기 (전역 N과 무관하게 생성)
+  const count = conf.count[0] + randInt(conf.count[1]-conf.count[0]+1);
+  const colorList = PALETTE.slice(0, conf.colors);
+  const cells = new Map();
+  cells.set(key(randInt(gn),0,randInt(gn)), colorList[randInt(colorList.length)]); // seed on floor
+
+  let tries=0;
+  while(cells.size < count && tries < count*60){
+    tries++;
+    const arr=[...cells.keys()];
+    const pick = arr[randInt(arr.length)].split(',').map(Number);
+    const dirs=[[1,0,0],[-1,0,0],[0,0,1],[0,0,-1],[0,1,0]];
+    const d=dirs[randInt(dirs.length)];
+    const bx=pick[0]+d[0], by=pick[1]+d[1], bz=pick[2]+d[2];
+    if(bx<0||bx>=gn||by<0||by>=gn||bz<0||bz>=gn) continue;
+    const k=key(bx,by,bz);
+    if(cells.has(k)) continue;
+    if(!isSupported(cells, bx, by, bz)) continue;
+    cells.set(k, colorList[randInt(colorList.length)]);
+  }
+  return cells;
+}
+
+function buildAllPuzzles(){
+  DIFFS.forEach(d=>{
+    state.puzzles[d] = [];
+    for(let i=0;i<10;i++) state.puzzles[d].push(generatePuzzle(d));
+  });
+}
+
+/* ---------------- 투영(뷰) 계산 ----------------
+   좌표계: x:0(왼)~N-1(오), y:0(아래)~N-1(위), z:0(앞)~N-1(뒤)
+   화면 행은 N-1-y 로 뒤집어 높은 블록이 위에 보이게 함.
+   front : (x,y), z 최소(가장 앞).            가로 = x
+   back  : (x,y), z 최대(가장 뒤). 좌우 반전.  가로 = N-1-x
+   right : (z,y), x 최대(가장 오른쪽).         가로 = z      (앞=왼쪽, 뒤=오른쪽)
+   left  : (z,y), x 최소(가장 왼쪽).           가로 = N-1-z  (뒤=왼쪽, 앞=오른쪽)
+   top   : (x,z), y 최대(가장 위).             세로 = N-1-z(뒤가 위), 가로 = x
+*/
+function computeViews(cellMap){
+  const front=grid2(N,N), back=grid2(N,N), right=grid2(N,N), left=grid2(N,N), top=grid2(N,N);
+  for(let x=0;x<N;x++){
+    for(let y=0;y<N;y++){
+      for(let z=0;z<N;z++){ const c=cellMap.get(key(x,y,z)); if(c){ front[N-1-y][x]=c; break; } }
+      for(let z=N-1;z>=0;z--){ const c=cellMap.get(key(x,y,z)); if(c){ back[N-1-y][N-1-x]=c; break; } }
+    }
+  }
+  for(let z=0;z<N;z++){
+    for(let y=0;y<N;y++){
+      // right: 오른쪽(x 최대)에서 본 면 — 앞(z=0)이 왼쪽, 뒤(z=N-1)가 오른쪽
+      for(let x=N-1;x>=0;x--){ const c=cellMap.get(key(x,y,z)); if(c){ right[N-1-y][z]=c; break; } }
+      // left: 왼쪽(x 최소)에서 본 면 — 뒤(z=N-1)가 왼쪽, 앞(z=0)이 오른쪽
+      for(let x=0;x<N;x++){ const c=cellMap.get(key(x,y,z)); if(c){ left[N-1-y][N-1-z]=c; break; } }
+    }
+  }
+  for(let x=0;x<N;x++){
+    for(let z=0;z<N;z++){
+      for(let y=N-1;y>=0;y--){ const c=cellMap.get(key(x,y,z)); if(c){ top[N-1-z][x]=c; break; } }
+    }
+  }
+  return { front, back, right, left, top };
+}
+
+function grid2(rows,cols){ return Array.from({length:rows}, ()=>Array(cols).fill(null)); }
+function gridsEqual(a,b){
+  for(let r=0;r<a.length;r++) for(let c=0;c<a[r].length;c++) if(a[r][c]!==b[r][c]) return false;
+  return true;
+}
+function diffGrid(a,b){
+  const d=grid2(a.length,a[0].length);
+  for(let r=0;r<a.length;r++) for(let c=0;c<a[r].length;c++) d[r][c]=(a[r][c]!==b[r][c]);
+  return d;
+}
+
+/* ---------------- 뷰 렌더 (목표 / 내 투영도) ---------------- */
+const VIEW_LABELS = { front:'정면', right:'우측면', left:'좌측면', back:'후면', top:'평면(위)' };
+const VIEW_ORDER = ['front','right','left','back','top'];
+
+function makeViewBox(label, grid, mismatch, matched){
+  const box=document.createElement('div');
+  box.className='view-box'+(matched?' matched':'');
+  const lbl=document.createElement('div');
+  lbl.className='label';
+  lbl.textContent=label+(matched?' ✓':'');
+  box.appendChild(lbl);
+  const g=document.createElement('div');
+  g.className='view-grid';
+  g.style.setProperty('--n', N);
+  grid.forEach((row,ri)=>row.forEach((c,ci)=>{
+    const cell=document.createElement('div');
+    cell.className='vcell';
+    if(c) cell.style.background=COLOR_HEX[c];
+    if(mismatch && mismatch[ri][ci]) cell.classList.add('mismatch');
+    g.appendChild(cell);
+  }));
+  box.appendChild(g);
+  return box;
+}
+
+function renderTargetViews(){
+  const views=computeViews(state.target);
+  const wrap=document.getElementById('targetViews');
+  wrap.innerHTML='';
+  VIEW_ORDER.forEach(k=> wrap.appendChild(makeViewBox(VIEW_LABELS[k], views[k], null, false)));
+}
+
+function renderPlayerViews(){
+  const tv=computeViews(state.target);
+  const pv=computeViews(state.build);
+  const wrap=document.getElementById('playerViews');
+  wrap.innerHTML='';
+  let matched=0;
+  VIEW_ORDER.forEach(k=>{
+    const eq=gridsEqual(tv[k], pv[k]);
+    if(eq) matched++;
+    wrap.appendChild(makeViewBox(VIEW_LABELS[k], pv[k], eq?null:diffGrid(tv[k],pv[k]), eq));
+  });
+  updateMatchStatus(matched, VIEW_ORDER.length);
+}
+
+function updateMatchStatus(m, total){
+  const el=document.getElementById('matchStatus');
+  el.textContent = `${m} / ${total} 뷰 일치`;
+  el.classList.toggle('full', m===total);
+  if(m===total && state.build.size>0 && !state.solved){
+    state.solved=true;
+    state.locked=true;                 // 채점 후 편집 잠금 — 재시작해야 다시 가능
+    clearInterval(state.timerInt);
+    state.done[state.diff][state.problemIndex]=true;
+    renderNumGrid();
+    lockEditing();
+    const banner=document.getElementById('resultBanner');
+    clearTimeout(warnTimeout);
+    banner.className='result-banner ok';
+    banner.textContent = state.usedAnswer
+      ? '💡 정답을 불러와 채점 완료했습니다. 더 이상 수정할 수 없어요 — 위의 문제 번호(또는 난이도)를 다시 눌러 재시작하세요.'
+      : '🎉 완성! 5개 뷰가 모두 일치합니다. 다시 풀려면 문제 번호를 다시 눌러 재시작하세요.';
+  }
+}
+
+function lockEditing(){
+  document.getElementById('undoBtn').disabled=true;
+  document.getElementById('resetBtn').disabled=true;
+  document.getElementById('answerBtn').disabled=true;
+  document.getElementById('editorGrid').classList.add('locked');
+}
+
+/* ---------------- 3D 아이소메트릭 미리보기 ---------------- */
+const CV_W=240; // 캔버스 논리 폭(고정). 높이/타일크기는 격자 N에 맞춰 매번 계산
+function shade(hex,f){
+  let r=parseInt(hex.slice(1,3),16), g=parseInt(hex.slice(3,5),16), b=parseInt(hex.slice(5,7),16);
+  const cl=v=>Math.max(0,Math.min(255,Math.round(v)));
+  return `rgb(${cl(r*f)},${cl(g*f)},${cl(b*f)})`;
+}
+function render3D(){
+  const cv=document.getElementById('preview3d');
+  const ctx=cv.getContext('2d');
+  const n=N;
+  // 격자 크기에 맞춰 타일 치수 자동 스케일 (N이 커지면 작게)
+  const tw=Math.max(10, Math.floor((CV_W-24)/(2*n)));
+  const th=Math.max(5, Math.round(tw*0.5));
+  const cht=Math.round(tw*0.95);
+  const margin=14;
+  const minRel=-((n-1)*cht + th);                 // 가장 높은 블록(맨 위) 꼭짓점
+  const maxRel=(2*(n-1))*th + cht + th;            // 가장 앞 바닥 타일 아래 꼭짓점
+  const cvH=Math.ceil(maxRel-minRel)+margin*2;
+  const ox=CV_W/2, oy=margin-minRel;
+  const dpr=window.devicePixelRatio||1;
+  cv.width=CV_W*dpr; cv.height=cvH*dpr; cv.style.maxWidth=CV_W+'px';
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,CV_W,cvH);
+
+  const isoX=(x,z)=> ox+(x-z)*tw;
+  const isoY=(x,y,z)=> oy+(x+z)*th - y*cht;
+
+  // 바닥 격자
+  ctx.strokeStyle='rgba(255,255,255,.07)'; ctx.lineWidth=1;
+  for(let x=0;x<n;x++) for(let z=0;z<n;z++){
+    const cx=isoX(x,z), cy=isoY(x,0,z)+cht;
+    ctx.beginPath();
+    ctx.moveTo(cx,cy-th); ctx.lineTo(cx+tw,cy); ctx.lineTo(cx,cy+th); ctx.lineTo(cx-tw,cy);
+    ctx.closePath(); ctx.stroke();
+  }
+
+  // 블록을 뒤→앞 순으로 그려 가림 처리
+  const blocks=[];
+  state.build.forEach((color,k)=>{ const p=k.split(',').map(Number); blocks.push({x:p[0],y:p[1],z:p[2],color}); });
+  blocks.sort((a,b)=> (a.x+a.z)-(b.x+b.z) || a.y-b.y);
+  blocks.forEach(b=>{
+    const cx=isoX(b.x,b.z), cy=isoY(b.x,b.y,b.z);
+    const base=COLOR_HEX[b.color];
+    const faces=[
+      {pts:[[cx,cy-th],[cx+tw,cy],[cx,cy+th],[cx-tw,cy]], col:shade(base,1.2)},          // top
+      {pts:[[cx-tw,cy],[cx,cy+th],[cx,cy+th+cht],[cx-tw,cy+cht]], col:shade(base,0.82)},  // left
+      {pts:[[cx+tw,cy],[cx,cy+th],[cx,cy+th+cht],[cx+tw,cy+cht]], col:shade(base,0.6)}    // right
+    ];
+    faces.forEach(f=>{
+      ctx.beginPath();
+      f.pts.forEach((p,i)=> i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));
+      ctx.closePath();
+      ctx.fillStyle=f.col; ctx.fill();
+      ctx.strokeStyle='rgba(0,0,0,.35)'; ctx.lineWidth=1; ctx.stroke();
+    });
+  });
+}
+
+/* ---------------- 조립 에디터 ---------------- */
+function renderLegend(){
+  const wrap=document.getElementById('cycleLegend');
+  wrap.innerHTML='';
+  const pal=activePalette();
+  const items=pal.map((col,i)=>({n:i+1, sw:COLOR_HEX[col], name:COLOR_NAME[col]}));
+  items.push({n:pal.length+1, sw:null, name:'지우기'});
+  items.forEach(it=>{
+    const row=document.createElement('div'); row.className='cyc-item';
+    const n=document.createElement('span'); n.className='cyc-n'; n.textContent=it.n;
+    const sw=document.createElement('span'); sw.className='swatch';
+    if(it.sw){ sw.style.background=it.sw; } else { sw.style.background='#0f1116'; sw.style.border='1px solid var(--line)'; }
+    row.appendChild(n); row.appendChild(sw); row.appendChild(document.createTextNode(it.name));
+    wrap.appendChild(row);
+  });
+}
+
+function pushHistory(){
+  state.history.push(new Map(state.build));
+  if(state.history.length>80) state.history.shift();
+  document.getElementById('undoBtn').disabled=false;
+}
+
+function nextColor(cur){
+  const pal=activePalette();
+  if(!cur) return pal[0];
+  const i=pal.indexOf(cur);
+  return (i>=0 && i<pal.length-1) ? pal[i+1] : null; // 마지막 색 다음은 지우기
+}
+
+function placeAt(x,y,z){
+  if(state.locked) return;          // 완성/정답확인 후에는 수정 불가 (재시작 필요)
+  const k=key(x,y,z);
+  const cur=state.build.get(k);
+  const next=nextColor(cur);
+  if(next===null){
+    if(!state.build.has(k)) return;
+    pushHistory();
+    state.build.delete(k);
+    let yy=y+1;
+    while(state.build.has(key(x,yy,z))){ state.build.delete(key(x,yy,z)); yy++; } // 위 블록 동반 붕괴
+  } else {
+    if(!cur && !isSupported(state.build,x,y,z)){
+      flashWarning('바닥이나 다른 블록 위에만 놓을 수 있어요 (중력)');
+      return;
+    }
+    pushHistory();
+    state.build.set(k,next);
+  }
+  syncBuild();
+}
+
+function renderEditor(){
+  const wrap=document.getElementById('editorGrid');
+  wrap.innerHTML='';
+  wrap.style.gridTemplateColumns=`repeat(${N},42px)`;
+  wrap.classList.toggle('locked', state.locked);
+  const y=state.currentLayer;
+  for(let zi=N-1; zi>=0; zi--){
+    for(let x=0; x<N; x++){
+      const cell=document.createElement('div');
+      cell.className='ecell';
+      const c=state.build.get(key(x,y,zi));
+      if(c) cell.style.background=COLOR_HEX[c];
+      else if(y>0 && state.build.has(key(x,y-1,zi))) cell.classList.add('support');
+      cell.onclick=()=> placeAt(x,y,zi);
+      wrap.appendChild(cell);
+    }
+  }
+}
+
+/* build가 바뀔 때 한 번에 갱신 */
+function syncBuild(){
+  renderEditor();
+  render3D();
+  renderPlayerViews();
+}
+
+function renderLayerTabs(){
+  const wrap=document.getElementById('layerTabs');
+  wrap.innerHTML='';
+  for(let y=N-1;y>=0;y--){
+    const btn=document.createElement('button');
+    btn.textContent=`층 ${y+1}`+(y===N-1?' (위)':y===0?' (아래)':'');
+    if(y===state.currentLayer) btn.classList.add('active');
+    btn.onclick=()=>{ state.currentLayer=y; renderLayerTabs(); renderEditor(); };
+    wrap.appendChild(btn);
+  }
+}
+
+function renderNumGrid(){
+  const wrap=document.getElementById('numGrid');
+  wrap.innerHTML='';
+  for(let i=0;i<10;i++){
+    const btn=document.createElement('button');
+    btn.textContent=i+1;
+    if(i===state.problemIndex) btn.classList.add('active');
+    if(state.done[state.diff][i]) btn.classList.add('done');
+    btn.onclick=()=> loadProblem(state.diff,i);
+    wrap.appendChild(btn);
+  }
+  document.getElementById('scoreLabel').textContent=
+    `${state.done[state.diff].filter(Boolean).length} / 10 완료`;
+}
+
+/* ---------------- 경고 토스트 ---------------- */
+let warnTimeout=null;
+function flashWarning(msg){
+  const banner=document.getElementById('resultBanner');
+  if(banner.classList.contains('ok')) return; // 완성 메시지는 덮어쓰지 않음
+  clearTimeout(warnTimeout);
+  banner.className='result-banner warn';
+  banner.textContent='⚠ '+msg;
+  warnTimeout=setTimeout(()=>{ banner.className='result-banner'; banner.textContent=''; }, 1600);
+}
+
+/* ---------------- 타이머 ---------------- */
+function startTimer(){
+  clearInterval(state.timerInt);
+  state.timerStart=Date.now();
+  state.timerInt=setInterval(()=>{
+    const s=Math.floor((Date.now()-state.timerStart)/1000);
+    document.getElementById('timer').textContent=
+      String(Math.floor(s/60)).padStart(2,'0')+':'+String(s%60).padStart(2,'0');
+  },1000);
+}
+
+/* ---------------- 문제 로드 ---------------- */
+function loadProblem(diff, idx){
+  state.diff=diff;
+  N=DIFF_CONF[diff].grid;             // 난이도에 맞는 격자 크기로 전환
+  state.problemIndex=idx;
+  state.target=state.puzzles[diff][idx];
+  state.build=new Map();
+  state.history=[];
+  state.currentLayer=0;
+  state.solved=false;
+  state.locked=false;
+  state.usedAnswer=false;
+
+  document.querySelectorAll('#diffSeg button').forEach(b=> b.classList.toggle('active', b.dataset.diff===diff));
+  clearTimeout(warnTimeout);
+  const banner=document.getElementById('resultBanner');
+  banner.className='result-banner'; banner.textContent='';
+  document.getElementById('undoBtn').disabled=true;
+  document.getElementById('resetBtn').disabled=false;
+  document.getElementById('answerBtn').disabled=false;
+
+  renderTargetViews();
+  renderLegend();
+  renderLayerTabs();
+  renderNumGrid();
+  syncBuild();
+  startTimer();
+}
+
+/* ---------------- 이벤트 ---------------- */
+document.getElementById('diffSeg').addEventListener('click', e=>{
+  const btn=e.target.closest('button[data-diff]');
+  if(btn) loadProblem(btn.dataset.diff,0);
+});
+document.getElementById('undoBtn').addEventListener('click', ()=>{
+  if(!state.history.length) return;
+  state.build=state.history.pop();
+  if(!state.history.length) document.getElementById('undoBtn').disabled=true;
+  syncBuild();
+});
+document.getElementById('resetBtn').addEventListener('click', ()=>{
+  if(state.build.size===0) return;
+  pushHistory();
+  state.build=new Map();
+  syncBuild();
+});
+document.getElementById('answerBtn').addEventListener('click', ()=>{
+  if(state.locked) return;
+  state.usedAnswer=true;
+  state.build=new Map(state.target);
+  syncBuild();   // 정답은 5/5 일치 → updateMatchStatus가 채점 + 잠금 처리
+});
+
+/* ---------------- 초기화 ---------------- */
+buildAllPuzzles();
+loadProblem('easy', 0);
+</script>
+</body>
+</html>
