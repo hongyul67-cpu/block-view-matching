@@ -691,10 +691,11 @@ function rcSubmit(){
   }
   const done = rcDoneCount();
   if(done === 0){ alert('먼저 문제를 하나 이상 완료한 뒤 제출하세요!'); return; }
+  // 이 도구는 시험이 아니라 '완료 개수'를 보냄 → 시트 열 이름도 그에 맞게 지정
   ResultCollector.open({
-    score: Math.round(done / 50 * 100),
     correct: done,
-    total: 50
+    total: 50,
+    labels: { correct: '완료 개수', total: '총 문제', rate: '완료율(%)', wrong: '—' }
   });
 }
 /* endpoint(?rc=)가 있을 때만 제출 버튼 노출 */
