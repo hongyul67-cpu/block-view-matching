@@ -195,6 +195,7 @@
     <div class="spacer"></div>
     <div class="timer" id="timer">00:00</div>
     <div class="score" id="scoreLabel">0 / 10 완료</div>
+    <button id="rcSubmitBtn" style="display:none;margin-top:8px;width:100%;background:#16a34a;color:#fff;border:0;border-radius:8px;padding:9px;font-weight:700;cursor:pointer;font-family:inherit" onclick="rcSubmit()">📤 선생님께 제출</button>
   </div>
 
   <div class="panel">
@@ -672,6 +673,35 @@ document.getElementById('answerBtn').addEventListener('click', ()=>{
 /* ---------------- 초기화 ---------------- */
 buildAllPuzzles();
 loadProblem('easy', 0);
+</script>
+
+<!-- 결과 수집 위젯: 선생님이 링크 생성기로 만든 ?rc= 링크로 접속했을 때만 제출 버튼이 나타납니다 -->
+<script src="https://hongyul67-cpu.github.io/links/collector.js" data-tool="블록 뷰 매칭" data-max-num="40"></script>
+<script>
+/* 제출: 난이도 5종 × 10문제 = 50문제 중 완료 개수를 선생님 시트로 보냄 */
+function rcHasEndpoint(){
+  return !!(window.ResultCollector && ResultCollector.config && ResultCollector.config.endpoint);
+}
+function rcDoneCount(){
+  return DIFFS.reduce((sum,d)=> sum + state.done[d].filter(Boolean).length, 0);
+}
+function rcSubmit(){
+  if(!rcHasEndpoint()){
+    alert('결과 제출 링크로 접속했을 때만 제출할 수 있어요. (선생님이 나눠준 링크를 사용하세요)');return;
+  }
+  const done = rcDoneCount();
+  if(done === 0){ alert('먼저 문제를 하나 이상 완료한 뒤 제출하세요!'); return; }
+  ResultCollector.open({
+    score: Math.round(done / 50 * 100),
+    correct: done,
+    total: 50
+  });
+}
+/* endpoint(?rc=)가 있을 때만 제출 버튼 노출 */
+(function(){
+  const b = document.getElementById('rcSubmitBtn');
+  if(b && rcHasEndpoint()) b.style.display = '';
+})();
 </script>
 </body>
 </html>
