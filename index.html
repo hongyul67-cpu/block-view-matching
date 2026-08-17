@@ -416,7 +416,7 @@ function updateMatchStatus(m, total){
     state.done[state.diff][state.problemIndex]=true;
     state.peeked[state.diff][state.problemIndex]=state.usedAnswer;  // 정답보기 사용 여부 기록
     /* 랭킹전 — 한 문제를 풀 때마다 정산. 정답보기를 쓰면 절반만 인정한다 */
-    if(window.RankKit) RankKit.award(state.usedAnswer?50:100, '블록 뷰 매칭 — '+state.diff);
+    if(window.RankKit) RankKit.award(state.usedAnswer?50:100, '정투상도 — '+state.diff);
     renderNumGrid();
     lockEditing();
     const banner=document.getElementById('resultBanner');
